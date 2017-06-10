@@ -62,30 +62,35 @@ int main(int argc, char *argv[])
    //***************************************************************************
     if ( argc < 3 )
     {
-         printf ("%s\n","Usage: temper <db_filename> <delay>");
+         printf ("%s\n","Usage: temper <db_filename> <hours>");
 
          return 1; // Not enough command line arguments...
     }
 
     char * filename = argv[1]; // Name of the database file.
 
-    int delay=atoi(argv[2]); // Sleep time before next data gather in sec.
+    int hours=atoi(argv[2]); // How many hours to gather data.
 
-    printf("%s %s %s %d\n","filename:",filename,"Delay in seconds:",delay);
+    printf("%s %s %s %d\n","filename:",filename,"hours:",hours);
 
-    // Got the database filename and delay from the command line...
+    // Got the database filename and hours from the command line...
     //**************************************************************************
 
     //--------------------------------------------------------------------------
-    Temper *t=NULL;              // A temper2 temperature sensing device.
+    Temper *t=NULL;                     // A temper2 temperature sensing device.
 
-    int ret=0;                   // Return value from TemperGetData.
-    long current_time=0;         // Unintelligable time in seconds.
-    sqlite3 *db=NULL;            // Handle for the sqlite3 database.
-    char *err_msg = 0;           // An error string.
-    char sql[160];               // For Structured Query Language commands.
+    int ret=0;                          // Return value from TemperGetData.
+    long current_time=0;                // Unintelligable time in seconds.
+    long start_time=create_timestamp(); // Need to remember start for timing.
+    long end_time=start_time;           // Future timestamp we need to reach.
+    sqlite3 *db=NULL;                   // Handle for the sqlite3 database.
+    char *err_msg = 0;                  // An error string.
+    char sql[160];                      // For Structured Query Language commands.
     unsigned char buf[8];
-    char sn[80];                 // Temper device serial number.
+    char sn[80];                        // Temper device serial number.
+
+    // Set the end time based on number of hours to run.
+    end_time = end_time + (hours * 60 * 60);
 
     // Create database.
     int rc = sqlite3_open(filename, &db);  
@@ -122,15 +127,13 @@ int main(int argc, char *argv[])
     usb_find_busses();
     usb_find_devices();
 
-    int outerLoop=3600;  // How many sets of readings to take.
-
     do
     {
         int device_count = TemperCount(); // Number of devices to loop through.
   
         do
         {
-            --device_count; // Loop from 0 to number of devices - 1.
+            --device_count; // Loop from max device to least device.
             current_time = create_timestamp();
 
             // WARNING, if existing temper device need to deallocate it.
@@ -204,15 +207,9 @@ int main(int argc, char *argv[])
 
         } while ( device_count > 0 );
 
-        --outerLoop;
+   } while ( current_time < end_time );
 
-        sleep(delay);
-
-        for ( rc = 0  ; rc < 25 ; ++rc )
-        {     printf("\n");  }
-
-   } while (outerLoop>=0);
-
+   sleep(10);
    sqlite3_close(db);
 
    if (t)
